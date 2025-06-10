@@ -1,4 +1,5 @@
 #include "../include/utils.hpp"
+#include "flat_matrix.hpp"
 #include <algorithm>
 #include <chrono>
 #include <random>
@@ -102,25 +103,44 @@ FlatMatrix elementwise_mul(const FlatMatrix &A, const FlatMatrix &B) {
   return M;
 }
 
-/*
 FlatMatrix softmax_jacobian(const std::vector<double> &p) {
-  FlatMatrix DiagonalMatrix(p.size(), p.size(), 0.0);
+  FlatMatrix D(p.size(), p.size(), 0.0);
 
-  int R = DiagonalMatrix.rows();
-  int C = DiagonalMatrix.cols();
+  int R = D.rows();
+  int C = D.cols();
   for (int i = 0; i < R; ++i) {
-    for (int j = 0; j < C; ++j) {
-      if (i == j) {
-        DiagonalMatrix.set(i, j, p[i]);
-      }
+    D.set(i, i, p[i]);
+  }
+
+  int n = static_cast<int>(p.size());
+  FlatMatrix P(n, n, 0.0);
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < n; ++j) {
+      P.set(i, j, p[i] * p[j]);
     }
   }
 
-  FlatMatrix PMatrix(p.size(), 1, 0.0);
-  for (int i = 0; i < R; ++i) {
-    for (int j = 0; j < 1; ++j) {
-      PMatrix.set(int i, int j, double value)
-    }
-  }
+  FlatMatrix J = subtract(D, P);
+
+  return J;
 }
-        */
+
+double numerical_gradient(std::function<double(const FlatMatrix &)> f,
+                          const FlatMatrix &W, int i, int j, double eps) {
+  FlatMatrix W_plus = W;
+  FlatMatrix W_minus = W;
+
+  if (i < 0 || i >= W.rows() || j < 0 || j >= W.cols()) {
+    throw std::out_of_range("numerical_gradient: ungültiger Index (i,j).");
+  }
+
+  double original_value = W.get(i, j);
+  W_plus.set(i, j, original_value + eps);
+  W_minus.set(i, j, original_value - eps);
+
+  double f_plus = f(W_plus);
+  double f_minus = f(W_minus);
+
+  double gradient_approx = (f_plus - f_minus) / (2.0 * eps);
+  return gradient_approx;
+}

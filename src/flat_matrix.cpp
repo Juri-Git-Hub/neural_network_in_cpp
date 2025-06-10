@@ -84,4 +84,21 @@ FlatMatrix matmul(const FlatMatrix &A, const FlatMatrix &B) {
   return Result;
 }
 
+FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B) {
+  int rA = A.rows(), cA = A.cols();
+  int rB = B.rows(), cB = B.cols();
+
+  if (rA != rB || cA != cB) {
+    throw std::invalid_argument("subtract: dimensions do not match!");
+  }
+
+  FlatMatrix R(rA, cA, 0.0);
+  for (int i = 0; i < rA; ++i) {
+    for (int j = 0; j < cA; ++j) {
+      R.set(i, j, A.get(i, j) - B.get(i, j));
+    }
+  }
+  return R;
+}
+
 FlatMatrix::~FlatMatrix() { delete[] m_data; }

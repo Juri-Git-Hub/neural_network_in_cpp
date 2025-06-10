@@ -1,36 +1,30 @@
 #include "../include/flat_matrix.hpp"
 #include "../include/utils.hpp"
+#include <chrono>
 #include <iostream>
 
 int main() {
-  // 1) Test elementwise_max (ähnlich einer ReLU mit threshold=0.0)
-  FlatMatrix M(3, 3, -1.0);
-  M.set(0, 0, -2.5);
-  M.set(1, 1, 0.5);
-  M.set(2, 2, -0.2);
-  double threshold = 0.0;
+  // Wähle N (beispielsweise 200 oder 300)
+  int N = 200;
+  // Erstelle zwei Zufallsmatrizen A und B
+  FlatMatrix A = randn_matrix(N, N, 0.0, 1.0, 1.0);
+  FlatMatrix B = randn_matrix(N, N, 0.0, 1.0, 1.0);
 
-  FlatMatrix R = elementwise_max(M, threshold);
-  std::cout << "elementwise_max(M, 0.0) ergibt:\n";
-  for (int i = 0; i < R.rows(); ++i) {
-    for (int j = 0; j < R.cols(); ++j) {
-      std::cout << R.get(i, j) << " ";
-    }
-    std::cout << "\n";
-  }
-  std::cout << "\n";
+  // Starte die Zeitmessung
+  auto t_start = std::chrono::high_resolution_clock::now();
+  FlatMatrix C = matmul(A, B);
+  auto t_end = std::chrono::high_resolution_clock::now();
 
-  // 2) Test elementwise_mul
-  FlatMatrix A(2, 2, 2.0);
-  FlatMatrix B(2, 2, 3.0);
-  B.set(1, 1, 4.0); // B = [[3,3],[3,4]]
-  FlatMatrix C = elementwise_mul(A, B);
-  std::cout << "elementwise_mul(A, B) ergibt:\n";
-  for (int i = 0; i < C.rows(); ++i) {
-    for (int j = 0; j < C.cols(); ++j) {
-      std::cout << C.get(i, j) << " ";
-    }
-    std::cout << "\n";
-  }
+  // Berechne die vergangene Zeit in Sekunden
+  std::chrono::duration<double> duration = t_end - t_start;
+  std::cout << "matmul für " << N << "×" << N
+            << " dauerte: " << duration.count() << " Sekunden\n";
+
   return 0;
 }
+
+/*
+cmake ..
+cmake --build .
+./neural_network_cpp
+*/

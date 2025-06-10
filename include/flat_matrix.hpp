@@ -26,3 +26,5 @@ private:
 };
 
 FlatMatrix matmul(const FlatMatrix &A, const FlatMatrix &B);
+
+FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B);
