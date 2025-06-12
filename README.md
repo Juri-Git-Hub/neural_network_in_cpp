@@ -1,0 +1,1 @@
+Im writing a full neural network in C++ from scratch. The goal is to pass the MNIST dataset with an accuracy of 95% or higher! My main ressource is the book "Neural Networks from Scratch in Python". Im writing the code without any C++ libraries.
