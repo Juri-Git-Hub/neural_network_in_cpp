@@ -2,6 +2,8 @@
 
 class FlatMatrix {
 public:
+  FlatMatrix() : m_rows(0), m_cols(0), m_data(nullptr) {}
+
   FlatMatrix(int rows, int cols, double initVal = 0.0);
 
   FlatMatrix(const FlatMatrix &other);

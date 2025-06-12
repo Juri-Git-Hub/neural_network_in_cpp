@@ -1,19 +1,20 @@
+/********************  tests/test_activation_relu.cpp  *******************/
 #include <cassert>
 #include <cmath>
 #include <functional>
 #include <iostream>
-#include <vector>
+#include <stdexcept>
 
+#include "../include/activation_relu.hpp"
 #include "../include/flat_matrix.hpp"
-#include "../include/layer_dense.hpp"
 
-// ---------- Hilfsfunktionen -------------------------------------------
-constexpr double EPS = 1e-9;
-bool approx(double a, double b, double eps = EPS) {
+// ────────── kleine Hilfen ──────────
+constexpr double EPS = 1e-12;
+inline bool approx(double a, double b, double eps = EPS) {
   return std::fabs(a - b) < eps;
 }
 
-void expect_throw(std::function<void()> fn, const char *msg) {
+void expect_throw(const std::function<void()> &fn, const char *msg) {
   bool ok = false;
   try {
     fn();
@@ -24,102 +25,73 @@ void expect_throw(std::function<void()> fn, const char *msg) {
   assert(ok && msg);
 }
 
-// ---------- Prüfvorgaben (von Hand/NumPy berechnet) -------------------
-void reference_values(std::vector<double> &exp_out,
-                      std::vector<double> &exp_dweights,
-                      std::vector<double> &exp_dbiases,
-                      std::vector<double> &exp_dinputs) {
-  // Forward-Erwartung  (2×3)  flach in row-major
-  exp_out = {0.95, -0.25, 0.0, 1.15, -0.85, 0.2};
-
-  // dweights         (2×3)
-  exp_dweights = {0.5, -0.5, 0.0, 3.5, 1.5, -5.0};
-
-  // dbiases          (Länge 3)
-  exp_dbiases = {1.5, 0.5, -2.0};
-
-  // dinputs          (2×2)
-  exp_dinputs = {0.2, 0.4, 0.25, 0.1};
-}
-
-// ---------- Haupt-Test -------------------------------------------------
+// ────────── Tests ──────────────────
 int main() {
-  /* ------------------------------------------------------------------
-     1. Konstruktion & manuelles Setzen deterministischer Gewichte
-  ------------------------------------------------------------------ */
-  LayerDense layer(2, 3);
+  /* ---------------------------------------------------------------
+     1. Forward-Pass: Richtigkeit & Shape
+  --------------------------------------------------------------- */
+  FlatMatrix X(1, 5);
+  X.set(0, 0, -2.0);
+  X.set(0, 1, -1.0);
+  X.set(0, 2, 0.0);
+  X.set(0, 3, 1.0);
+  X.set(0, 4, 2.0);
 
-  // ► feste Gewichte (2×3) – identisch zu den Referenzwerten
-  const std::vector<double> W = {0.10, 0.20, -0.10, 0.40, -0.20, 0.00};
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 3; ++j)
-      layer.weights.set(i, j, W[i * 3 + j]);
+  ActivationReLU relu;
+  relu.forward(X);
 
-  // ► Biases (3)
-  layer.biases = {0.05, -0.05, 0.10};
+  assert(relu.output.rows() == 1 && relu.output.cols() == 5);
 
-  // ► Zwei Input-Samples (2×2)
-  FlatMatrix X(2, 2);
-  X.set(0, 0, 1.0);
-  X.set(0, 1, 2.0);
-  X.set(1, 0, -1.0);
-  X.set(1, 1, 3.0);
+  const double exp_out[5] = {0, 0, 0, 1, 2};
+  for (int j = 0; j < 5; ++j)
+    assert(approx(relu.output.get(0, j), exp_out[j]));
 
-  /* ------------------------------------------------------------------
-     2. Forward-Pass: Ergebnis & Dimensionen
-  ------------------------------------------------------------------ */
-  layer.forward(X);
-  assert(layer.output.rows() == 2 && layer.output.cols() == 3);
+  /* ---------------------------------------------------------------
+     2. Backward-Pass: Gradienten korrekt maskieren
+  --------------------------------------------------------------- */
+  FlatMatrix dvals(1, 5, 10.0); // Upstream-Gradient überall 10
+  relu.backward(dvals);
 
-  std::vector<double> exp_out;
-  std::vector<double> exp_dw, exp_db, exp_di;
-  reference_values(exp_out, exp_dw, exp_db, exp_di);
+  const double exp_grad[5] = {0, 0, 0, 10, 10};
+  for (int j = 0; j < 5; ++j)
+    assert(approx(relu.dinputs.get(0, j), exp_grad[j]));
 
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 3; ++j)
-      assert(approx(layer.output.get(i, j), exp_out[i * 3 + j]));
+  /* ---------------------------------------------------------------
+     3. Fehlerfälle: Dimensions-Mismatch
+  --------------------------------------------------------------- */
+  FlatMatrix bad_rows(2, 5, 1.0); // rows != inputs.rows()
+  expect_throw([&]() { relu.backward(bad_rows); },
+               "ReLU backward: rows mismatch nicht erkannt");
 
-  /* ------------------------------------------------------------------
-     3. Backward-Pass
-  ------------------------------------------------------------------ */
-  FlatMatrix dvalues(2, 3);
-  // Konstant gewählte Gradient-Matrix
-  const double DV[6] = {1, 0, -1, 0.5, 0.5, -1};
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 3; ++j)
-      dvalues.set(i, j, DV[i * 3 + j]);
+  FlatMatrix bad_cols(1, 4, 1.0); // cols != inputs.cols()
+  expect_throw([&]() { relu.backward(bad_cols); },
+               "ReLU backward: cols mismatch nicht erkannt");
 
-  layer.backward(dvalues);
+  /* ---------------------------------------------------------------
+     4. Rauch-Test mit großer Matrix (Stabilität, keine asserts)
+  --------------------------------------------------------------- */
+  FlatMatrix bigX(500, 500, -1.0);
+  for (int i = 0; i < bigX.rows(); ++i)
+    for (int j = 0; j < bigX.cols(); ++j)
+      bigX.set(i, j, (i + j) % 7 - 3); // ein bisschen Variation
+  relu.forward(bigX);
+  relu.backward(bigX); // nur segfault-Test
 
-  // -- dweights prüfen (2×3)
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 3; ++j)
-      assert(approx(layer.dweights.get(i, j), exp_dw[i * 3 + j]));
+  std::cout << "All ActivationReLU tests passed ✔️" << std::endl;
 
-  // -- dbiases prüfen (3)
-  for (int j = 0; j < 3; ++j)
-    assert(approx(layer.dbiases[j], exp_db[j]));
+  FlatMatrix A; // default
+  assert(A.rows() == 0 && A.cols() == 0);
 
-  // -- dinputs prüfen (2×2)
-  for (int i = 0; i < 2; ++i)
-    for (int j = 0; j < 2; ++j)
-      assert(approx(layer.dinputs.get(i, j), exp_di[i * 2 + j]));
+  A = FlatMatrix(2, 3, 1.0); // Zuweisung auf leeres Objekt
+  assert(A.get(1, 2) == 1.0);
 
-  /* ------------------------------------------------------------------
-     4. Fehlerfälle: Dimension-Mismatch
-  ------------------------------------------------------------------ */
-  FlatMatrix badX(1, 3); // 3 statt 2 Spalten
-  expect_throw([&]() { layer.forward(badX); },
-               "Kein Exception-Wurf bei cols-Mismatch");
+  FlatMatrix B = A; // Copy-Ctor
+  B.set(0, 0, 5.0);
+  assert(A.get(0, 0) == 1.0); // deep copy?
 
-  FlatMatrix badDV(2, 4); // Spalten≠neurons
-  expect_throw([&]() { layer.backward(badDV); },
-               "Kein Exception-Wurf bei dvalues-Mismatch");
-
-  /* ------------------------------------------------------------------
-     5. Ausgabe nur bei Erfolg
-  ------------------------------------------------------------------ */
-  std::cout << "All LayerDense tests passed ✔️" << std::endl;
+  FlatMatrix C; // Copy-Assignment
+  C = A;
+  assert(C.get(0, 1) == 1.0);
   return 0;
 }
 

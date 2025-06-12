@@ -101,4 +101,7 @@ FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B) {
   return R;
 }
 
-FlatMatrix::~FlatMatrix() { delete[] m_data; }
+FlatMatrix::~FlatMatrix() {
+  if (m_data)
+    delete[] m_data;
+}
