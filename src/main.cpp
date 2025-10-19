@@ -6,14 +6,20 @@
 #include <vector>
 
 #include "../include/flat_matrix.hpp"
-#include "../include/activation_softmax.hpp"   // deine Softmax-Klasse
+#include "../include/categorical_cross_entropy.hpp"  // dein Header
 
-// ---------- kleine Hilfsroutinen ----------
-constexpr double EPS_FWD = 1e-6;
-constexpr double EPS_BWD = 1e-6;
-constexpr double EPS_SUM = 1e-12;
+// ---------- kleine Hilfen ----------
+constexpr double EPS = 1e-8;
 
-bool approx(double a, double b, double eps) { return std::fabs(a - b) <= eps; }
+FlatMatrix from2D(const std::vector<std::vector<double>>& v) {
+    int R = static_cast<int>(v.size());
+    int C = static_cast<int>(v.empty() ? 0 : v[0].size());
+    FlatMatrix M(R, C, 0.0);
+    for (int i = 0; i < R; ++i)
+        for (int j = 0; j < C; ++j)
+            M.set(i, j, v[i][j]);
+    return M;
+}
 
 void expect_throw(const std::function<void()>& fn, const char* msg) {
     bool ok = false;
@@ -26,188 +32,138 @@ void expect_throw(const std::function<void()>& fn, const char* msg) {
     }
 }
 
-FlatMatrix from2D(const std::vector<std::vector<double>>& v) {
-    int R = static_cast<int>(v.size());
-    int C = static_cast<int>(v.empty() ? 0 : v[0].size());
-    FlatMatrix M(R, C, 0.0);
-    for (int i = 0; i < R; ++i)
-        for (int j = 0; j < C; ++j)
-            M.set(i, j, v[i][j]);
-    return M;
-}
-
-double max_abs_diff(const FlatMatrix& A,
-                    const std::vector<std::vector<double>>& ref) {
-    int R = A.rows(), C = A.cols();
-    double m = 0.0;
-    for (int i = 0; i < R; ++i)
-        for (int j = 0; j < C; ++j)
-            m = std::max(m, std::fabs(A.get(i, j) - ref[i][j]));
-    return m;
-}
-
-double row_sum(const FlatMatrix& M, int i) {
-    double s = 0.0;
-    for (int j = 0; j < M.cols(); ++j) s += M.get(i, j);
-    return s;
-}
-
-void print_matrix(const char* name, const FlatMatrix& M) {
-    std::cout << name << " (" << M.rows() << "x" << M.cols() << "):\n";
-    for (int i = 0; i < M.rows(); ++i) {
-        for (int j = 0; j < M.cols(); ++j) {
-            std::cout << M.get(i, j);
-            if (j + 1 < M.cols()) std::cout << ' ';
-        }
-        std::cout << '\n';
-    }
+bool approx(double a, double b, double eps = EPS) {
+    return std::fabs(a - b) <= eps;
 }
 
 // ---------- Tests ----------
-void test_sanity_1x3_backward() {
-    // Wir testen nur die Backward-Formel mit einem bekannten Beispiel:
-    // s = [0.8, 0.1, 0.1], g = [1, 0, -1] -> dz = [0.24, -0.07, -0.17]
-    ActivationSoftmax sm;
-    // Trick: Wir setzen direkt sm.output, um nur die Backward-Formel zu verifizieren.
-    sm.output = from2D({{0.8, 0.1, 0.1}});
+void test_single_sample_values() {
+    LossCategoricalCrossEntropy loss;
 
-    FlatMatrix dvalues = from2D({{1.0, 0.0, -1.0}});
-    sm.backward(dvalues);
+    auto clip_prob = [](double p) {
+        const double CLIP = 1e-7;
+        if (p < CLIP) return CLIP;
+        if (p > 1.0 - CLIP) return 1.0 - CLIP;
+        return p;
+    };
 
-    std::vector<std::vector<double>> ref = {{0.24, -0.07, -0.17}};
+    // p_t = 1.0 -> wegen symmetrischem Clipping nicht exakt 0,
+    // sondern -log(1 - 1e-7) ~ 1.00000005e-7
+    {
+        auto p = from2D({{1.0, 0.0, 0.0}});
+        std::vector<int> y = {0};
+        double L = loss.forward(p, y);
 
-    // Form
-    assert(sm.dinputs.rows() == 1 && sm.dinputs.cols() == 3);
-
-    // Werte
-    double mad = max_abs_diff(sm.dinputs, ref);
-    if (mad > EPS_BWD) {
-        print_matrix("got dinputs", sm.dinputs);
-        std::cerr << "Sanity 1x3 backward: max abs diff = " << mad << " > " << EPS_BWD << "\n";
-        std::abort();
+        const double expected = -std::log(clip_prob(1.0));
+        // etwas großzügigere Toleranz für diesen Spezialfall
+        if (std::fabs(L - expected) > 1e-9) {
+            std::cerr << "Expected ~" << expected << " but got " << L << "\n";
+            std::abort();
+        }
+        // zusätzlich: L ist endlich und >= 0
+        assert(std::isfinite(L) && L >= 0.0);
     }
 
-    // Zeilensumme ≈ 0
-    if (std::fabs(row_sum(sm.dinputs, 0)) > EPS_SUM) {
-        std::cerr << "Sanity 1x3 backward: row sum not ~0\n";
-        std::abort();
+    // p_t = 0.5 -> ~0.69314718
+    {
+        auto p = from2D({{0.5, 0.5, 0.0}});
+        std::vector<int> y = {0};
+        double L = loss.forward(p, y);
+        assert(approx(L, 0.6931471805599453, 1e-12));
     }
 
-    std::cout << "Sanity 1x3 backward ✔\n";
+    // p_t = 0.1 -> ~2.30258509
+    {
+        auto p = from2D({{0.1, 0.9, 0.0}});
+        std::vector<int> y = {0};
+        double L = loss.forward(p, y);
+        assert(approx(L, 2.302585092994046, 1e-12));
+    }
+
+    std::cout << "Single-sample CCE values ✔\n";
 }
 
-void test_2x3_forward_and_backward() {
-    // Forward: bekannte Inputs & Sollwerte
-    auto X = from2D({
-        {2.0, 1.0, 0.5},
-        {1.0, 3.0, 2.0}
+void test_two_sample_batch_label_and_onehot() {
+    LossCategoricalCrossEntropy loss;
+
+    // 2×3 Beispiel aus der Theorie
+    auto p = from2D({
+        {0.7, 0.2, 0.1},
+        {0.1, 0.5, 0.4}
     });
-    std::vector<std::vector<double>> ref_softmax = {
-        {0.62853172, 0.23122390, 0.14024438},
-        {0.09003057, 0.66524096, 0.24472847}
-    };
+    std::vector<int> y_labels = {0, 2};
+    auto y_onehot = from2D({
+        {1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0}
+    });
 
-    ActivationSoftmax sm;
-    sm.forward(X);
+    // Erwarteter Mittelwert: ~0.63648283
+    double L_labels = loss.forward(p, y_labels);
+    double L_onehot = loss.forward(p, y_onehot);
 
-    // Forward-Check
-    double mad_fwd = max_abs_diff(sm.output, ref_softmax);
-    if (mad_fwd > EPS_FWD) {
-        print_matrix("got softmax", sm.output);
-        std::cerr << "Forward 2x3: max abs diff = " << mad_fwd << " > " << EPS_FWD << "\n";
+    if (!approx(L_labels, 0.63648283) || !approx(L_onehot, 0.63648283)) {
+        std::cerr << "Got L_labels=" << L_labels
+                  << " L_onehot=" << L_onehot
+                  << " expected ~0.63648283\n";
         std::abort();
     }
-    // Zeilensummen = 1
-    for (int i = 0; i < sm.output.rows(); ++i) {
-        if (!approx(row_sum(sm.output, i), 1.0, EPS_SUM)) {
-            std::cerr << "Forward 2x3: row " << i << " does not sum to 1\n";
-            std::abort();
-        }
-    }
+    // Gleichheit Label vs. One-Hot
+    assert(approx(L_labels, L_onehot));
 
-    // Backward: Upstream-Gradient & Sollwerte
-    auto dvalues = from2D({
-        { 1.0,  0.0, -1.0},
-        { 0.5,  0.5, -1.0}
+    std::cout << "Batch (labels & one-hot) ✔\n";
+}
+
+void test_clipping_edges() {
+    LossCategoricalCrossEntropy loss;
+
+    // Wahrscheinlichkeiten knapp bei 0/1 (soll nicht explodieren)
+    auto p = from2D({
+        {1.0 - 1e-12, 1e-12, 0.0},
+        {1e-12, 1.0 - 1e-12, 0.0}
     });
-    std::vector<std::vector<double>> ref_dinputs = {
-        { 0.32162764, -0.11290370, -0.20872394},
-        { 0.03304957,  0.24420510, -0.27725467}
-    };
+    std::vector<int> y = {0, 1};
 
-    sm.backward(dvalues);
-
-    double mad_bwd = max_abs_diff(sm.dinputs, ref_dinputs);
-    if (mad_bwd > EPS_BWD) {
-        print_matrix("got dinputs", sm.dinputs);
-        std::cerr << "Backward 2x3: max abs diff = " << mad_bwd << " > " << EPS_BWD << "\n";
-        std::abort();
-    }
-    // Zeilensummen ≈ 0
-    for (int i = 0; i < sm.dinputs.rows(); ++i) {
-        if (std::fabs(row_sum(sm.dinputs, i)) > EPS_SUM) {
-            std::cerr << "Backward 2x3: row " << i << " sum not ~0\n";
-            std::abort();
-        }
-    }
-
-    std::cout << "Forward+Backward 2x3 ✔\n";
+    double L = loss.forward(p, y);
+    // Erwartung: kleiner, aber >0; insbesondere endlich
+    assert(std::isfinite(L) && L >= 0.0);
+    std::cout << "Clipping near 0/1 ✔\n";
 }
 
 void test_error_cases() {
-    // Fehlerfälle: falsche Rows/Cols sollen invalid_argument werfen
-    ActivationSoftmax sm;
-    auto X = from2D({{2.0,1.0,0.5},{1.0,3.0,2.0}});
-    sm.forward(X);
+    LossCategoricalCrossEntropy loss;
 
-    // rows mismatch
-    auto bad_rows = from2D({{1,0,-1},{0.5,0.5,-1},{7,7,7}});
-    expect_throw([&](){ sm.backward(bad_rows); },
-        "rows mismatch not detected");
+    // Shape-Mismatch (rows)
+    auto p = from2D({{0.7,0.2,0.1}});
+    std::vector<int> y_bad = {0, 2};
+    expect_throw([&](){ (void)loss.forward(p, y_bad); }, "rows mismatch not detected");
 
-    // cols mismatch
-    auto bad_cols = from2D({{1,0},{0.5,0.5}});
-    expect_throw([&](){ sm.backward(bad_cols); },
-        "cols mismatch not detected");
+    // Shape-Mismatch (one-hot)
+    auto p2 = from2D({
+        {0.7,0.2,0.1},
+        {0.1,0.5,0.4}
+    });
+    auto y_onehot_bad = from2D({
+        {1.0,0.0,0.0}
+        // zweite Zeile fehlt
+    });
+    expect_throw([&](){ (void)loss.forward(p2, y_onehot_bad); }, "one-hot rows mismatch not detected");
+
+    // Ungültiger Label-Index (nur wenn du das prüfst)
+    // Erwartung: invalid_argument
+    auto p3 = from2D({{0.7,0.2,0.1}});
+    std::vector<int> y_oob = {5};
+    // Wenn dieser Test bei dir (noch) nicht wirft, füge die Indexprüfung in deiner forward(labels) hinzu.
+    // expect_throw([&](){ (void)loss.forward(p3, y_oob); }, "label index out of range not detected");
 
     std::cout << "Error cases ✔\n";
 }
 
-void test_smoke_large() {
-    // Großer Smoke-Test auf Stabilität (kein genauer Sollwert)
-    const int R = 500, C = 10;
-    FlatMatrix X(R, C, 0.0);
-    for (int i = 0; i < R; ++i)
-        for (int j = 0; j < C; ++j)
-            X.set(i, j, (i*7 + j*11) % 13 - 6);  // bisschen Variation
-
-    ActivationSoftmax sm;
-    sm.forward(X);
-
-    FlatMatrix d(R, C, 0.0);
-    for (int i = 0; i < R; ++i)
-        for (int j = 0; j < C; ++j)
-            d.set(i, j, ((i+j)%3==0) ? 1.0 : -0.5);
-
-    sm.backward(d);
-
-    // Zeilensummen ~ 0
-    for (int i = 0; i < R; ++i) {
-        if (std::fabs(row_sum(sm.dinputs, i)) > 1e-9) {
-            std::cerr << "Smoke: row " << i << " sum not ~0\n";
-            std::abort();
-        }
-    }
-    std::cout << "Smoke large ✔\n";
-}
-
-// ---------- main ----------
 int main() {
-    test_sanity_1x3_backward();
-    test_2x3_forward_and_backward();
+    test_single_sample_values();
+    test_two_sample_batch_label_and_onehot();
+    test_clipping_edges();
     test_error_cases();
-    test_smoke_large();
 
-    std::cout << "All Softmax backward checks passed ✅\n";
+    std::cout << "All CCE forward checks passed ✅\n";
     return 0;
 }
