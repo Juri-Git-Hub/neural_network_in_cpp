@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "../include/flat_matrix.hpp"
-#include "../include/categorical_cross_entropy.hpp"  // dein Header
+#include "../include/categorical_cross_entropy.hpp"
+#include "../include/activation_softmax.hpp"
+#include "../include/activation_softmax_loss_categorical_cross_entropy.hpp"
 
 // ---------- kleine Hilfen ----------
 constexpr double EPS = 1e-8;
@@ -158,12 +160,314 @@ void test_error_cases() {
     std::cout << "Error cases ✔\n";
 }
 
+// ========== NEUE TESTS FÜR BACKWARD PASSES ==========
+
+void test_softmax_backward_jacobian() {
+    std::cout << "\n=== Testing Softmax Backward (Jacobian Method) ===\n";
+    
+    ActivationSoftmax softmax;
+    
+    // Einfaches Beispiel: 2 samples, 3 classes
+    auto inputs = from2D({
+        {1.0, 2.0, 3.0},
+        {0.5, 1.5, 0.2}
+    });
+    
+    // Forward pass
+    softmax.forward(inputs);
+    
+    std::cout << "Softmax output (sample 0): ";
+    for (int j = 0; j < 3; ++j) {
+        std::cout << softmax.output.get(0, j) << " ";
+    }
+    std::cout << "\n";
+    
+    // Backward pass mit Gradient = ones
+    auto dvalues = from2D({
+        {1.0, 1.0, 1.0},
+        {1.0, 1.0, 1.0}
+    });
+    
+    softmax.backward(dvalues);
+    
+    std::cout << "Softmax dinputs (sample 0): ";
+    for (int j = 0; j < 3; ++j) {
+        std::cout << softmax.dinputs.get(0, j) << " ";
+    }
+    std::cout << "\n";
+    
+    // Prüfe, dass die Summe der dinputs pro Sample ~0 ist (Eigenschaft von Softmax)
+    double sum_sample0 = 0.0;
+    for (int j = 0; j < 3; ++j) {
+        sum_sample0 += softmax.dinputs.get(0, j);
+    }
+    assert(approx(sum_sample0, 0.0, 1e-10));
+    
+    std::cout << "Softmax backward (Jacobian) ✔\n";
+}
+
+void test_loss_backward_sparse_labels() {
+    std::cout << "\n=== Testing Loss Backward (Sparse Labels) ===\n";
+    
+    LossCategoricalCrossEntropy loss;
+    
+    // Predicted probabilities
+    auto y_pred = from2D({
+        {0.7, 0.2, 0.1},
+        {0.1, 0.5, 0.4}
+    });
+    
+    std::vector<int> y_true = {0, 2};
+    
+    // Backward pass
+    loss.backward(y_pred, y_true);
+    
+    std::cout << "Loss dinputs:\n";
+    for (int i = 0; i < 2; ++i) {
+        std::cout << "  Sample " << i << ": ";
+        for (int j = 0; j < 3; ++j) {
+            std::cout << loss.dinputs.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Prüfe, dass dinputs endlich sind
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            assert(std::isfinite(loss.dinputs.get(i, j)));
+        }
+    }
+    
+    std::cout << "Loss backward (sparse) ✔\n";
+}
+
+void test_loss_backward_onehot() {
+    std::cout << "\n=== Testing Loss Backward (One-Hot) ===\n";
+    
+    LossCategoricalCrossEntropy loss;
+    
+    auto y_pred = from2D({
+        {0.7, 0.2, 0.1},
+        {0.1, 0.5, 0.4}
+    });
+    
+    auto y_true = from2D({
+        {1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0}
+    });
+    
+    loss.backward(y_pred, y_true);
+    
+    std::cout << "Loss dinputs (one-hot):\n";
+    for (int i = 0; i < 2; ++i) {
+        std::cout << "  Sample " << i << ": ";
+        for (int j = 0; j < 3; ++j) {
+            std::cout << loss.dinputs.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    assert(std::isfinite(loss.dinputs.get(0, 0)));
+    
+    std::cout << "Loss backward (one-hot) ✔\n";
+}
+
+void test_combined_softmax_loss_forward() {
+    std::cout << "\n=== Testing Combined Softmax+Loss Forward ===\n";
+    
+    ActivationSoftmaxLossCategoricalCrossEntropy combined;
+    
+    // Raw logits (vor Softmax)
+    auto inputs = from2D({
+        {1.0, 2.0, 3.0},
+        {0.5, 1.5, 0.2}
+    });
+    
+    std::vector<int> y_true = {2, 1};
+    
+    // Forward pass
+    double loss_value = combined.forward(inputs, y_true);
+    
+    std::cout << "Combined forward loss: " << loss_value << "\n";
+    std::cout << "Combined output (sample 0): ";
+    for (int j = 0; j < 3; ++j) {
+        std::cout << combined.output.get(0, j) << " ";
+    }
+    std::cout << "\n";
+    
+    assert(std::isfinite(loss_value));
+    assert(loss_value >= 0.0);
+    
+    std::cout << "Combined forward ✔\n";
+}
+
+void test_combined_softmax_loss_backward() {
+    std::cout << "\n=== Testing Combined Softmax+Loss Backward (Optimized) ===\n";
+    
+    ActivationSoftmaxLossCategoricalCrossEntropy combined;
+    
+    // Raw logits
+    auto inputs = from2D({
+        {1.0, 2.0, 3.0},
+        {0.5, 1.5, 0.2},
+        {2.0, 1.0, 0.5}
+    });
+    
+    std::vector<int> y_true = {2, 1, 0};
+    
+    // Forward pass
+    double loss_value = combined.forward(inputs, y_true);
+    std::cout << "Loss: " << loss_value << "\n";
+    
+    // Backward pass - verwendet die optimierte Formel
+    combined.backward(combined.output, y_true);
+    
+    std::cout << "Combined dinputs:\n";
+    for (int i = 0; i < 3; ++i) {
+        std::cout << "  Sample " << i << ": ";
+        for (int j = 0; j < 3; ++j) {
+            std::cout << combined.dinputs.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Wichtige Eigenschaft: dinputs[i, y_true[i]] sollte negativ sein
+    // (weil output[i, y_true[i]] - 1 < 0 für korrekte Predictions)
+    for (int i = 0; i < 3; ++i) {
+        int true_label = y_true[i];
+        double grad = combined.dinputs.get(i, true_label);
+        std::cout << "  Gradient for true class (sample " << i << "): " << grad << "\n";
+    }
+    
+    // Summe der Gradienten pro Sample sollte klein sein (normalisiert)
+    for (int i = 0; i < 3; ++i) {
+        double sum = 0.0;
+        for (int j = 0; j < 3; ++j) {
+            sum += combined.dinputs.get(i, j);
+        }
+        std::cout << "  Sum of gradients (sample " << i << "): " << sum << "\n";
+        // Die Summe sollte ~0 sein aufgrund der Normalisierung
+        assert(approx(sum, 0.0, 1e-6));
+    }
+    
+    std::cout << "Combined backward ✔\n";
+}
+
+void test_combined_with_onehot() {
+    std::cout << "\n=== Testing Combined with One-Hot Labels ===\n";
+    
+    ActivationSoftmaxLossCategoricalCrossEntropy combined;
+    
+    auto inputs = from2D({
+        {1.0, 2.0, 3.0},
+        {0.5, 1.5, 0.2}
+    });
+    
+    auto y_true = from2D({
+        {0.0, 0.0, 1.0},  // class 2
+        {0.0, 1.0, 0.0}   // class 1
+    });
+    
+    // Forward
+    double loss = combined.forward(inputs, y_true);
+    std::cout << "Loss with one-hot: " << loss << "\n";
+    
+    // Backward
+    combined.backward(combined.output, y_true);
+    
+    std::cout << "Dinputs with one-hot:\n";
+    for (int i = 0; i < 2; ++i) {
+        std::cout << "  Sample " << i << ": ";
+        for (int j = 0; j < 3; ++j) {
+            std::cout << combined.dinputs.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    std::cout << "Combined with one-hot ✔\n";
+}
+
+void test_gradient_numerical_check() {
+    std::cout << "\n=== Numerical Gradient Check ===\n";
+    
+    // Einfache numerische Überprüfung des Gradienten
+    ActivationSoftmax softmax;
+    
+    auto inputs = from2D({{1.0, 2.0, 3.0}});
+    softmax.forward(inputs);
+    
+    auto dvalues = from2D({{0.1, 0.2, -0.3}});
+    softmax.backward(dvalues);
+    
+    // Numerischer Gradient mit finiten Differenzen
+    double epsilon = 1e-5;
+    FlatMatrix numerical_grad(1, 3, 0.0);
+    
+    for (int j = 0; j < 3; ++j) {
+        // f(x + h)
+        auto inputs_plus = inputs;
+        inputs_plus.set(0, j, inputs.get(0, j) + epsilon);
+        softmax.forward(inputs_plus);
+        auto output_plus = softmax.output;
+        
+        // f(x - h)
+        auto inputs_minus = inputs;
+        inputs_minus.set(0, j, inputs.get(0, j) - epsilon);
+        softmax.forward(inputs_minus);
+        auto output_minus = softmax.output;
+        
+        // Gradient = sum(dL/doutput * doutput/dinput)
+        double grad = 0.0;
+        for (int k = 0; k < 3; ++k) {
+            double doutput = (output_plus.get(0, k) - output_minus.get(0, k)) / (2 * epsilon);
+            grad += dvalues.get(0, k) * doutput;
+        }
+        numerical_grad.set(0, j, grad);
+    }
+    
+    std::cout << "Analytical gradient: ";
+    for (int j = 0; j < 3; ++j) {
+        std::cout << softmax.dinputs.get(0, j) << " ";
+    }
+    std::cout << "\n";
+    
+    std::cout << "Numerical gradient:  ";
+    for (int j = 0; j < 3; ++j) {
+        std::cout << numerical_grad.get(0, j) << " ";
+    }
+    std::cout << "\n";
+    
+    // Vergleiche
+    for (int j = 0; j < 3; ++j) {
+        double analytical = softmax.dinputs.get(0, j);
+        double numerical = numerical_grad.get(0, j);
+        double diff = std::fabs(analytical - numerical);
+        assert(diff < 1e-5);
+    }
+    
+    std::cout << "Numerical gradient check ✔\n";
+}
+
 int main() {
+    std::cout << "===== FORWARD PASS TESTS =====\n";
     test_single_sample_values();
     test_two_sample_batch_label_and_onehot();
     test_clipping_edges();
     test_error_cases();
+    
+    std::cout << "\n===== BACKWARD PASS TESTS =====\n";
+    test_softmax_backward_jacobian();
+    test_loss_backward_sparse_labels();
+    test_loss_backward_onehot();
+    
+    std::cout << "\n===== COMBINED SOFTMAX+LOSS TESTS =====\n";
+    test_combined_softmax_loss_forward();
+    test_combined_softmax_loss_backward();
+    test_combined_with_onehot();
+    
+    std::cout << "\n===== GRADIENT VERIFICATION =====\n";
+    test_gradient_numerical_check();
 
-    std::cout << "All CCE forward checks passed ✅\n";
+    std::cout << "\n✅ ALL TESTS PASSED! ✅\n";
     return 0;
 }

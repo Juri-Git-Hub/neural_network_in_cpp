@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 void ActivationSoftmax::forward(const FlatMatrix &inputs_) {
   inputs = inputs_;
@@ -46,19 +47,42 @@ void ActivationSoftmax::backward(const FlatMatrix &dvalues) {
 
   dinputs = FlatMatrix(R, C, 0.0);
 
+  // Enumerate outputs and gradients
   for (int i = 0; i < R; ++i)
   {
-    double dot = 0.0;
-
+    // Create Jacobian matrix for this sample
+    // jacobian_matrix = np.diagflat(single_output) - np.dot(single_output, single_output.T)
+    std::vector<std::vector<double>> jacobian(C, std::vector<double>(C, 0.0));
+    
+    // Build the Jacobian matrix
     for (int j = 0; j < C; ++j)
     {
-      dot += output.get(i, j) * dvalues.get(i, j);
+      double s_j = output.get(i, j);
+      for (int k = 0; k < C; ++k)
+      {
+        double s_k = output.get(i, k);
+        if (j == k)
+        {
+          // Diagonal: s_j * (1 - s_j)
+          jacobian[j][k] = s_j * (1.0 - s_j);
+        }
+        else
+        {
+          // Off-diagonal: -s_j * s_k
+          jacobian[j][k] = -s_j * s_k;
+        }
+      }
     }
-
+    
+    // Calculate sample-wise gradient: jacobian_matrix @ single_dvalues
     for (int j = 0; j < C; ++j)
     {
-      double new_val = output.get(i, j) * (dvalues.get(i, j) - dot);
-      dinputs.set(i, j, new_val);
+      double gradient = 0.0;
+      for (int k = 0; k < C; ++k)
+      {
+        gradient += jacobian[j][k] * dvalues.get(i, k);
+      }
+      dinputs.set(i, j, gradient);
     }
   }
 }

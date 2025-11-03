@@ -2,3 +2,4 @@ build/*
 .cache/*
 .vscode/settings.json
 .vscode
+neural_networks_from_scratch_book
