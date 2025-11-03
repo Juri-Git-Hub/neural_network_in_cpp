@@ -30,3 +30,11 @@ private:
 FlatMatrix matmul(const FlatMatrix &A, const FlatMatrix &B);
 
 FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B);
+
+FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B);
+
+FlatMatrix scalar_multiply(const FlatMatrix &M, double scalar);
+
+FlatMatrix operator*(const FlatMatrix &M, double scalar);
+
+FlatMatrix operator*(double scalar, const FlatMatrix &M);

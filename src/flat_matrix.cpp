@@ -101,6 +101,44 @@ FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B) {
   return R;
 }
 
+FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B) {
+  int rA = A.rows(), cA = A.cols();
+  int rB = B.rows(), cB = B.cols();
+
+  if (rA != rB || cA != cB) {
+    throw std::invalid_argument("add: dimensions do not match!");
+  }
+
+  FlatMatrix R(rA, cA, 0.0);
+  for (int i = 0; i < rA; ++i) {
+    for (int j = 0; j < cA; ++j) {
+      R.set(i, j, A.get(i, j) + B.get(i, j));
+    }
+  }
+  return R;
+}
+
+FlatMatrix scalar_multiply(const FlatMatrix &M, double scalar) {
+  int R = M.rows();
+  int C = M.cols();
+  
+  FlatMatrix Result(R, C, 0.0);
+  for (int i = 0; i < R; ++i) {
+    for (int j = 0; j < C; ++j) {
+      Result.set(i, j, M.get(i, j) * scalar);
+    }
+  }
+  return Result;
+}
+
+FlatMatrix operator*(const FlatMatrix &M, double scalar) {
+  return scalar_multiply(M, scalar);
+}
+
+FlatMatrix operator*(double scalar, const FlatMatrix &M) {
+  return scalar_multiply(M, scalar);
+}
+
 FlatMatrix::~FlatMatrix() {
   if (m_data)
     delete[] m_data;

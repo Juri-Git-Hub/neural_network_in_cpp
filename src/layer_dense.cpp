@@ -19,14 +19,8 @@ void LayerDense::forward(const FlatMatrix &Inputs) {
 
   this->inputs = Inputs;
 
-  output = matmul(inputs, weights);
-
-  for (int i = 0; i < output.rows(); ++i) {
-    for (int j = 0; j < output.cols(); ++j) {
-      double currentValue = output.get(i, j);
-      output.set(i, j, currentValue + biases[j]);
-    }
-  }
+  FlatMatrix linear_output = matmul(inputs, weights);
+  output = add_bias(linear_output, biases);
 }
 
 void LayerDense::backward(const FlatMatrix &dvalues) {

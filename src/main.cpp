@@ -9,6 +9,7 @@
 #include "../include/categorical_cross_entropy.hpp"
 #include "../include/activation_softmax.hpp"
 #include "../include/activation_softmax_loss_categorical_cross_entropy.hpp"
+#include "../include/utils.hpp"
 
 // ---------- kleine Hilfen ----------
 constexpr double EPS = 1e-8;
@@ -161,6 +162,142 @@ void test_error_cases() {
 }
 
 // ========== NEUE TESTS FÜR BACKWARD PASSES ==========
+
+void test_add_function() {
+    std::cout << "\n=== Testing FlatMatrix add() ===\n";
+    
+    auto A = from2D({
+        {1.0, 2.0, 3.0},
+        {4.0, 5.0, 6.0}
+    });
+    
+    auto B = from2D({
+        {0.5, 1.0, 1.5},
+        {2.0, 2.5, 3.0}
+    });
+    
+    FlatMatrix C = add(A, B);
+    
+    std::cout << "A + B result:\n";
+    for (int i = 0; i < C.rows(); ++i) {
+        std::cout << "  ";
+        for (int j = 0; j < C.cols(); ++j) {
+            std::cout << C.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Verify results
+    assert(approx(C.get(0, 0), 1.5));
+    assert(approx(C.get(0, 1), 3.0));
+    assert(approx(C.get(0, 2), 4.5));
+    assert(approx(C.get(1, 0), 6.0));
+    assert(approx(C.get(1, 1), 7.5));
+    assert(approx(C.get(1, 2), 9.0));
+    
+    // Test error case
+    auto D = from2D({{1.0, 2.0}});
+    expect_throw([&](){ (void)add(A, D); }, "dimension mismatch not detected");
+    
+    std::cout << "FlatMatrix add() ✔\n";
+}
+
+void test_add_bias_broadcasting() {
+    std::cout << "\n=== Testing add_bias() with Broadcasting ===\n";
+    
+    auto M = from2D({
+        {1.0, 2.0, 3.0},
+        {4.0, 5.0, 6.0},
+        {7.0, 8.0, 9.0}
+    });
+    
+    std::vector<double> bias = {0.1, 0.2, 0.3};
+    
+    FlatMatrix Result = add_bias(M, bias);
+    
+    std::cout << "Matrix + bias result:\n";
+    for (int i = 0; i < Result.rows(); ++i) {
+        std::cout << "  ";
+        for (int j = 0; j < Result.cols(); ++j) {
+            std::cout << Result.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Verify: each column gets the corresponding bias added
+    assert(approx(Result.get(0, 0), 1.1));
+    assert(approx(Result.get(0, 1), 2.2));
+    assert(approx(Result.get(0, 2), 3.3));
+    assert(approx(Result.get(1, 0), 4.1));
+    assert(approx(Result.get(2, 2), 9.3));
+    
+    // Test error case
+    std::vector<double> wrong_bias = {0.1, 0.2};
+    expect_throw([&](){ (void)add_bias(M, wrong_bias); }, "bias size mismatch not detected");
+    
+    std::cout << "add_bias() broadcasting ✔\n";
+}
+
+void test_scalar_multiply() {
+    std::cout << "\n=== Testing Scalar Multiplication ===\n";
+    
+    auto M = from2D({
+        {1.0, 2.0, 3.0},
+        {4.0, 5.0, 6.0}
+    });
+    
+    // Test with function
+    FlatMatrix Result1 = scalar_multiply(M, 2.5);
+    
+    std::cout << "M * 2.5 using function:\n";
+    for (int i = 0; i < Result1.rows(); ++i) {
+        std::cout << "  ";
+        for (int j = 0; j < Result1.cols(); ++j) {
+            std::cout << Result1.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Test with operator
+    FlatMatrix Result2 = M * 3.0;
+    FlatMatrix Result3 = 3.0 * M;
+    
+    std::cout << "M * 3.0 using operator:\n";
+    for (int i = 0; i < Result2.rows(); ++i) {
+        std::cout << "  ";
+        for (int j = 0; j < Result2.cols(); ++j) {
+            std::cout << Result2.get(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    // Verify results
+    assert(approx(Result1.get(0, 0), 2.5));
+    assert(approx(Result1.get(0, 1), 5.0));
+    assert(approx(Result1.get(1, 2), 15.0));
+    
+    assert(approx(Result2.get(0, 0), 3.0));
+    assert(approx(Result2.get(1, 1), 15.0));
+    
+    // Test commutativity: M * 3.0 == 3.0 * M
+    for (int i = 0; i < Result2.rows(); ++i) {
+        for (int j = 0; j < Result2.cols(); ++j) {
+            assert(approx(Result2.get(i, j), Result3.get(i, j)));
+        }
+    }
+    
+    // Test with negative scalar
+    FlatMatrix Result4 = M * -1.0;
+    assert(approx(Result4.get(0, 0), -1.0));
+    assert(approx(Result4.get(1, 2), -6.0));
+    
+    // Test with zero
+    FlatMatrix Result5 = M * 0.0;
+    assert(approx(Result5.get(0, 0), 0.0));
+    assert(approx(Result5.get(1, 1), 0.0));
+    
+    std::cout << "Scalar multiplication ✔\n";
+}
 
 void test_softmax_backward_jacobian() {
     std::cout << "\n=== Testing Softmax Backward (Jacobian Method) ===\n";
@@ -454,6 +591,11 @@ int main() {
     test_two_sample_batch_label_and_onehot();
     test_clipping_edges();
     test_error_cases();
+    
+    std::cout << "\n===== MATRIX OPERATIONS TESTS =====\n";
+    test_add_function();
+    test_add_bias_broadcasting();
+    test_scalar_multiply();
     
     std::cout << "\n===== BACKWARD PASS TESTS =====\n";
     test_softmax_backward_jacobian();

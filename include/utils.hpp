@@ -20,6 +20,8 @@ FlatMatrix elementwise_max(const FlatMatrix &M, double threshold);
 
 FlatMatrix elementwise_mul(const FlatMatrix &A, const FlatMatrix &B);
 
+FlatMatrix add_bias(const FlatMatrix &M, const std::vector<double> &bias);
+
 FlatMatrix softmax_jacobian(const std::vector<double> &p);
 
 double numerical_gradient(std::function<double(const FlatMatrix &)> f,
