@@ -211,7 +211,7 @@ void test_add_bias_broadcasting() {
         {7.0, 8.0, 9.0}
     });
     
-    std::vector<double> bias = {0.1, 0.2, 0.3};
+    auto bias = from2D({{0.1, 0.2, 0.3}});
     
     FlatMatrix Result = add_bias(M, bias);
     
@@ -232,8 +232,12 @@ void test_add_bias_broadcasting() {
     assert(approx(Result.get(2, 2), 9.3));
     
     // Test error case
-    std::vector<double> wrong_bias = {0.1, 0.2};
+    auto wrong_bias = from2D({{0.1, 0.2}});
     expect_throw([&](){ (void)add_bias(M, wrong_bias); }, "bias size mismatch not detected");
+    
+    // Test error case: bias not a row vector
+    auto wrong_bias2 = from2D({{0.1}, {0.2}, {0.3}});
+    expect_throw([&](){ (void)add_bias(M, wrong_bias2); }, "bias not a row vector not detected");
     
     std::cout << "add_bias() broadcasting ✔\n";
 }

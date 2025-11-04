@@ -101,6 +101,10 @@ FlatMatrix subtract(const FlatMatrix &A, const FlatMatrix &B) {
   return R;
 }
 
+FlatMatrix operator-(const FlatMatrix &A, const FlatMatrix &B) {
+  return subtract(A, B);
+}
+
 FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B) {
   int rA = A.rows(), cA = A.cols();
   int rB = B.rows(), cB = B.cols();
@@ -116,6 +120,10 @@ FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B) {
     }
   }
   return R;
+}
+
+FlatMatrix operator+(const FlatMatrix &A, const FlatMatrix &B) {
+  return add(A, B);
 }
 
 FlatMatrix scalar_multiply(const FlatMatrix &M, double scalar) {

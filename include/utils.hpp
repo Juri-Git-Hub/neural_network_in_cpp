@@ -15,12 +15,13 @@ FlatMatrix transpose(const FlatMatrix &M);
 
 std::vector<double> sum_rows(const FlatMatrix &M);
 std::vector<double> sum_cols(const FlatMatrix &M);
+FlatMatrix sum_cols_as_matrix(const FlatMatrix &M);
 
 FlatMatrix elementwise_max(const FlatMatrix &M, double threshold);
 
 FlatMatrix elementwise_mul(const FlatMatrix &A, const FlatMatrix &B);
 
-FlatMatrix add_bias(const FlatMatrix &M, const std::vector<double> &bias);
+FlatMatrix add_bias(const FlatMatrix &M, const FlatMatrix &bias);
 
 FlatMatrix softmax_jacobian(const std::vector<double> &p);
 

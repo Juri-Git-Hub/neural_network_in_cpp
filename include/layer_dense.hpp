@@ -14,9 +14,11 @@ public:
   FlatMatrix output;
   FlatMatrix dinputs;
   FlatMatrix weights;
-  std::vector<double> biases;
+  FlatMatrix biases;
   FlatMatrix dweights;
-  std::vector<double> dbiases;
+  FlatMatrix dbiases;
+  FlatMatrix weight_momentums;
+  FlatMatrix biases_momentum;
 
 private:
   FlatMatrix inputs;

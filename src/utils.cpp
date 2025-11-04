@@ -70,6 +70,20 @@ std::vector<double> sum_cols(const FlatMatrix &M) {
   return sums;
 }
 
+FlatMatrix sum_cols_as_matrix(const FlatMatrix &M) {
+  int R = M.rows();
+  int C = M.cols();
+
+  FlatMatrix result(1, C, 0.0);
+  for (int i = 0; i < R; ++i) {
+    for (int j = 0; j < C; ++j) {
+      double current = result.get(0, j);
+      result.set(0, j, current + M.get(i, j));
+    }
+  }
+  return result;
+}
+
 FlatMatrix elementwise_max(const FlatMatrix &M, double threshold) {
   int R = M.rows();
   int C = M.cols();
@@ -103,18 +117,22 @@ FlatMatrix elementwise_mul(const FlatMatrix &A, const FlatMatrix &B) {
   return M;
 }
 
-FlatMatrix add_bias(const FlatMatrix &M, const std::vector<double> &bias) {
+FlatMatrix add_bias(const FlatMatrix &M, const FlatMatrix &bias) {
   int R = M.rows();
   int C = M.cols();
   
-  if (C != static_cast<int>(bias.size())) {
+  if (bias.rows() != 1) {
+    throw std::invalid_argument("add_bias: bias must be a row vector (1 x n)!");
+  }
+  
+  if (C != bias.cols()) {
     throw std::invalid_argument("add_bias: number of columns must match bias size!");
   }
   
   FlatMatrix Result(R, C, 0.0);
   for (int i = 0; i < R; ++i) {
     for (int j = 0; j < C; ++j) {
-      Result.set(i, j, M.get(i, j) + bias[j]);
+      Result.set(i, j, M.get(i, j) + bias.get(0, j));
     }
   }
   return Result;
