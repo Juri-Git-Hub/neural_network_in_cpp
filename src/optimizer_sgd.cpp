@@ -1,4 +1,5 @@
 #include "../include/optimizer_sgd.hpp"
+#include "../include/utils.hpp"
 
 Optimizer_SGD::Optimizer_SGD(float learning_rate, float decay, float momentum) 
     : learning_rate(learning_rate), decay(decay), current_learning_rate(learning_rate), 
@@ -18,8 +19,8 @@ void Optimizer_SGD::update_params(LayerDense &layer) {
     {
         if (layer.weight_momentums.cols() == 0 || layer.weight_momentums.rows() == 0)
         {
-            layer.weight_momentums = FlatMatrix(layer.weights.rows(), layer.weights.cols(), 0.0);
-            layer.biases_momentum = FlatMatrix(1, layer.biases.cols(), 0.0);
+            layer.weight_momentums = create_matrix(layer.weights.rows(), layer.weights.cols(), 0.0);
+            layer.biases_momentum = create_matrix(1, layer.biases.cols(), 0.0);
         }
 
         FlatMatrix weight_updates = momentum * layer.weight_momentums - current_learning_rate * layer.dweights;
