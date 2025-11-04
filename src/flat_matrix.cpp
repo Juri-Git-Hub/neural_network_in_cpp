@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <stdexcept>
+#include <cmath>
 
 int FlatMatrix::index(int i, int j) const {
   if (i < 0 || i >= m_rows || j < 0 || j >= m_cols) {
@@ -122,8 +123,53 @@ FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B) {
   return R;
 }
 
+FlatMatrix divide(const FlatMatrix &A, const FlatMatrix &B) {
+  int rA = A.rows(), cA = A.cols();
+  int rB = B.rows(), cB = B.cols();
+
+  if (rA != rB || cA != cB) {
+    throw std::invalid_argument("divide: dimensions do not match!");
+  }
+
+  FlatMatrix R(rA, cA, 0.0);
+  for (int i = 0; i < rA; ++i) {
+    for (int j = 0; j < cA; ++j) {
+      double denominator = B.get(i, j);
+      if (denominator == 0.0) {
+        throw std::domain_error("divide: division by zero detected!");
+      }
+      R.set(i, j, A.get(i, j) / denominator);
+    }
+  }
+  return R;
+}
+
+FlatMatrix add(const FlatMatrix &M, double amount) {
+  int R = M.rows();
+  int C = M.cols();
+
+  FlatMatrix Result(R, C, 0.0);
+  for (int i = 0; i < R; ++i) {
+    for (int j = 0; j < C; ++j) {
+      Result.set(i, j, M.get(i, j) + amount);
+    }
+  }
+  return Result;
+}
+
 FlatMatrix operator+(const FlatMatrix &A, const FlatMatrix &B) {
   return add(A, B);
+}
+
+FlatMatrix operator+(const FlatMatrix &M, double amount) {
+  return add(M, amount);
+}
+FlatMatrix operator+(double amount, const FlatMatrix &M) {
+  return add(M, amount);
+}
+
+FlatMatrix operator/(const FlatMatrix &A, const FlatMatrix &B) {
+  return divide(A, B);
 }
 
 FlatMatrix scalar_multiply(const FlatMatrix &M, double scalar) {
@@ -150,4 +196,36 @@ FlatMatrix operator*(double scalar, const FlatMatrix &M) {
 FlatMatrix::~FlatMatrix() {
   if (m_data)
     delete[] m_data;
+}
+
+FlatMatrix pow(const FlatMatrix &M, int power) {
+  int R = M.rows();
+  int C = M.cols();
+
+  FlatMatrix Result(R, C, 0.0f);
+  for (int i = 0; i < R; ++i)
+  {
+    for (int j = 0; j < C; ++j)
+    {
+      Result.set(i, j, std::pow(M.get(i, j), power));
+    }
+  }
+
+  return Result;
+}
+
+FlatMatrix sqrt(const FlatMatrix &M) {
+  int R = M.rows();
+  int C = M.cols();
+
+  FlatMatrix Result(R, C, 0.0f);
+  for (int i = 0; i < R; ++i)
+  {
+    for (int j = 0; j < C; ++j)
+    {
+      Result.set(i, j, std::sqrt(M.get(i,j)));
+    }
+  }
+
+  return Result;
 }

@@ -35,7 +35,13 @@ FlatMatrix operator-(const FlatMatrix &A, const FlatMatrix &B);
 
 FlatMatrix add(const FlatMatrix &A, const FlatMatrix &B);
 
+FlatMatrix divide(const FlatMatrix &A, const FlatMatrix &B);
+
+FlatMatrix add(const FlatMatrix &M, double amount);
+
 FlatMatrix operator+(const FlatMatrix &A, const FlatMatrix &B);
+FlatMatrix operator+(const FlatMatrix &M, double amount);
+FlatMatrix operator+(double amount, const FlatMatrix &M);
 
 FlatMatrix operator-(const FlatMatrix &A, const FlatMatrix &B);
 
@@ -44,3 +50,9 @@ FlatMatrix scalar_multiply(const FlatMatrix &M, double scalar);
 FlatMatrix operator*(const FlatMatrix &M, double scalar);
 
 FlatMatrix operator*(double scalar, const FlatMatrix &M);
+
+FlatMatrix pow(const FlatMatrix &M, int power);
+
+FlatMatrix sqrt(const FlatMatrix &M);
+
+FlatMatrix operator/(const FlatMatrix &A, const FlatMatrix &B);

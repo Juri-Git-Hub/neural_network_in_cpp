@@ -19,6 +19,8 @@ public:
   FlatMatrix dbiases;
   FlatMatrix weight_momentums;
   FlatMatrix biases_momentum;
+  FlatMatrix weight_cache;
+  FlatMatrix bias_cache;
 
 private:
   FlatMatrix inputs;

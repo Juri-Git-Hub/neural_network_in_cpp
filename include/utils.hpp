@@ -3,6 +3,7 @@
 #include "../include/flat_matrix.hpp"
 #include <functional>
 #include <vector>
+#include <cmath>
 
 double randn(double mean = 0.0, double stddev = 1.0);
 

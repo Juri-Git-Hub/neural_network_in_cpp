@@ -9,8 +9,7 @@ LayerDense::LayerDense(int n_inputs, int n_neurons)
     : weights(randn_matrix(n_inputs, n_neurons, 0.0, 0.01)),
       biases(1, n_neurons, 0.0), inputs(0, n_inputs),
       output(0, n_neurons), dinputs(0, n_inputs), dweights(0, n_neurons),
-      dbiases(1, n_neurons, 0.0), weight_momentums(0, 0, 0.0),
-      biases_momentum(1, n_neurons, 0.0) {}
+      dbiases(1, n_neurons, 0.0) {}
 
 void LayerDense::forward(const FlatMatrix &Inputs) {
   if (Inputs.cols() != weights.rows()) {
